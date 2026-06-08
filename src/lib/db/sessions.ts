@@ -62,13 +62,28 @@ interface MessageRow {
   created_at: string;
 }
 
+function parseCitations(raw: unknown): Citation[] | null {
+  if (!raw) return null;
+  if (Array.isArray(raw)) return raw as Citation[];
+  // postgres.js can return JSONB as a raw string in some edge cases.
+  if (typeof raw === "string") {
+    try {
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? (parsed as Citation[]) : null;
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
 function toMessage(r: MessageRow): StoredMessage {
   return {
     id: r.id,
     sessionId: r.session_id,
     role: r.role,
     content: r.content,
-    citations: r.citations,
+    citations: parseCitations(r.citations),
     createdAt: r.created_at,
   };
 }

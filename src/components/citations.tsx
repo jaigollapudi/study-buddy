@@ -3,7 +3,7 @@ import type { Citation } from "@/lib/types";
 
 /** Compact source chips shown under an assistant message. */
 export function Citations({ citations }: { citations: Citation[] }) {
-  if (!citations.length) return null;
+  if (!Array.isArray(citations) || !citations.length) return null;
   return (
     <div className="mt-2 flex flex-wrap gap-1.5">
       {citations.map((c, i) => (

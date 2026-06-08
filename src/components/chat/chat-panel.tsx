@@ -128,7 +128,7 @@ export function ChatPanel() {
                     ) : m.role === "assistant" ? (
                       <>
                         <Markdown>{m.content}</Markdown>
-                        {m.citations && m.citations.length > 0 && (
+                        {Array.isArray(m.citations) && m.citations.length > 0 && (
                           <Citations citations={m.citations} />
                         )}
                       </>
