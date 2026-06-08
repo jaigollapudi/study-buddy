@@ -40,6 +40,36 @@ interface MatchRow {
   document_name: string;
 }
 
+/** All chunks from page 1 of each document (up to maxPerDoc), for catalog queries. */
+export async function getPageOneChunksPerDocument(
+  subjectId: string,
+  maxPerDoc = 8,
+): Promise<RetrievedChunk[]> {
+  const rows = await sql<MatchRow[]>`
+    select * from (
+      select
+        c.id, c.document_id, c.subject_id, c.content, c.page, c.chunk_index,
+        d.name as document_name,
+        row_number() over (partition by c.document_id order by c.chunk_index) as rn
+      from chunks c
+      join documents d on d.id = c.document_id
+      where c.subject_id = ${subjectId} and c.page = 1
+    ) t
+    where rn <= ${maxPerDoc}
+    order by document_name asc, chunk_index asc
+  `;
+  return rows.map((r) => ({
+    id: r.id,
+    documentId: r.document_id,
+    documentName: r.document_name,
+    subjectId: r.subject_id,
+    content: r.content,
+    page: r.page,
+    chunkIndex: r.chunk_index,
+    score: 1,
+  }));
+}
+
 /**
  * First N chunks from each document (by chunk_index). Used for chapter-list /
  * structure questions where we need one opening excerpt per uploaded file.

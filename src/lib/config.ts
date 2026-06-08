@@ -48,8 +48,13 @@ export const config = {
     topK: envNum("RAG_TOP_K", 20),
     /** Per-document hits for broad queries. */
     perDocTopK: envNum("RAG_PER_DOC_TOP_K", 2),
-    /** Final chunks sent to the LLM. Smaller = more focused answers. */
+    /** Final chunks sent to the LLM for focused (topic) questions. */
     maxContextChunks: envNum("RAG_MAX_CONTEXT_CHUNKS", 8),
+    /** Opening chunks per file for catalog questions (chapter lists, coverage). */
+    /** Page-1 chunks merged per file for catalog queries (covers buried titles). */
+    catalogChunksPerDoc: envNum("RAG_CATALOG_CHUNKS_PER_DOC", 8),
+    /** Max total chunks for catalog queries — one subject may have 14+ chapter PDFs. */
+    maxCatalogChunks: envNum("RAG_MAX_CATALOG_CHUNKS", 40),
     /** Reject chunks with cosine similarity below this threshold. */
     minSimilarity: envNum("RAG_MIN_SIMILARITY", 25) / 100, // stored as int % for env readability
     /** Max prior messages sent to the chat model (keeps local inference fast). */

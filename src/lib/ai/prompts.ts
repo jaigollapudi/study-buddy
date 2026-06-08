@@ -39,8 +39,10 @@ export function buildContextBlock(
 
   const hint =
     opts.intent === "catalog"
-      ? "\nNote: The student is asking about STRUCTURE. Look at ALL sources — " +
-        "chapter titles appear as short headings on page 1 of each document."
+      ? "\nNote: STRUCTURE question. Each Source is ONE uploaded chapter file. " +
+        "The chapter title is the short heading at the START of each source " +
+        "(usually page 1) — NOT sentences from the middle of the passage. " +
+        "Ignore cross-references to other grades/subjects (e.g. 'Grade 7 Curiosity')."
       : "";
 
   return (
@@ -59,10 +61,17 @@ export const prompts = {
   chat(context: string, intent: QueryIntent = "tutor") {
     const style =
       intent === "catalog"
-        ? `The student is asking about content structure (chapters, topics, coverage).
-Compile your answer across ALL sources. Each source may represent one chapter
-or document — read headings on page 1 to identify chapter titles.
-Give ONE clear numbered list. Do not repeat the list. Do not use raw filenames.`
+        ? `The student wants a chapter/topic list from their textbook materials.
+
+Rules:
+- Read EVERY source — each source is one chapter PDF.
+- For each source, extract the chapter TITLE from the first heading line only
+  (e.g. "Exploration: Entering the World of Secondary Science"), not body text.
+- Number the list in chapter order (Source order).
+- Do NOT use filenames (iesc101, iesc102) as titles.
+- Do NOT paste opening paragraph sentences as titles.
+- Do NOT list cross-references to other books found inside the text.
+- ONE numbered list only. No duplicates. No second list.`
         : `Give a clear, complete answer. Use the context passages to answer accurately.
 Structure your reply with short paragraphs or bullet points as appropriate.
 Avoid vague statements. If the question has multiple parts, address each one.`;
