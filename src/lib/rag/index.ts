@@ -1,18 +1,12 @@
 import { getTextProvider } from "@/lib/ai";
 import { config } from "@/lib/config";
-import {
-  getLeadChunksPerDocument,
-  insertChunks,
-  matchChunks,
-  type ChunkInput,
-} from "@/lib/db/chunks";
-import { createDocument, finalizeDocument, listDocuments } from "@/lib/db/documents";
-import type { RetrievedChunk, SourceDocument } from "@/lib/types";
+import { insertChunks, type ChunkInput } from "@/lib/db/chunks";
+import { createDocument, finalizeDocument } from "@/lib/db/documents";
+import type { SourceDocument } from "@/lib/types";
 import { chunkPages } from "./chunk";
-import { isSupplementaryDocument } from "./catalog";
-import { buildDocumentCatalog, formatChunkContent } from "./format";
-import { detectQueryIntent, type QueryIntent } from "./intent";
+import { formatChunkContent } from "./format";
 import { parseDocument } from "./parse";
+export { retrieveContext } from "./retrieve";
 
 /** Embed an array of texts in batches to avoid overloading Ollama. */
 async function embedBatched(texts: string[]): Promise<number[][]> {
@@ -27,8 +21,8 @@ async function embedBatched(texts: string[]): Promise<number[][]> {
 }
 
 /**
- * Parse → chunk → embed → persist a textbook for a subject. The document row is
- * created immediately (status "processing") and finalized when chunks land.
+ * Parse → chunk → embed → persist. No separate metadata layer — the chunks
+ * themselves are what the AI searches and reads.
  */
 export async function ingestDocument(
   subjectId: string,
@@ -73,42 +67,4 @@ export async function ingestDocument(
     });
     throw err;
   }
-}
-
-export interface RetrievalResult {
-  chunks: RetrievedChunk[];
-  intent: QueryIntent;
-  catalog: string;
-}
-
-/** Embed a query and retrieve chunks using intent-aware strategy. */
-export async function retrieveContext(
-  query: string,
-  opts: { subjectId?: string | null; topK?: number } = {},
-): Promise<RetrievalResult> {
-  const intent = detectQueryIntent(query);
-  const subjectId = opts.subjectId ?? null;
-
-  const docs = subjectId
-    ? (await listDocuments(subjectId)).filter((d) => d.status === "ready")
-    : [];
-  const catalog = buildDocumentCatalog(docs);
-
-  if (!query.trim()) {
-    return { chunks: [], intent, catalog };
-  }
-
-  // Structure questions: one opening excerpt per uploaded chapter file beats
-  // global vector search across thousands of body-text chunks.
-  if (intent === "catalog" && subjectId && docs.length) {
-    const lead = (await getLeadChunksPerDocument(subjectId, 1)).filter(
-      (c) => !isSupplementaryDocument(c.documentName),
-    );
-    return { chunks: lead, intent, catalog };
-  }
-
-  const [vector] = await getTextProvider().embed([query]);
-  const topK = opts.topK ?? (intent === "catalog" ? 12 : config.rag.topK);
-  const chunks = await matchChunks(vector, topK, subjectId);
-  return { chunks, intent, catalog };
 }

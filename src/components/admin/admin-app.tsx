@@ -32,9 +32,11 @@ import {
   deleteSubject,
   listDocuments,
   listSubjects,
+  reprocessDocuments,
   updateSubject,
   uploadDocument,
 } from "@/lib/client";
+import { sortChapterDocuments } from "@/lib/rag/catalog-utils";
 import type { SourceDocument, Subject } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -338,9 +340,31 @@ function SubjectDetail({ subject, onChanged }: { subject: Subject; onChanged: ()
       </button>
 
       <div className="space-y-2">
-        <div className="flex items-center gap-2 text-sm font-medium">
-          <BookOpen className="size-4 text-primary" /> Textbooks
-          <span className="text-xs font-normal text-muted-foreground">({docs.length})</span>
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 text-sm font-medium">
+            <BookOpen className="size-4 text-primary" /> Materials
+            <span className="text-xs font-normal text-muted-foreground">({docs.length})</span>
+          </div>
+          {docs.some((d) => d.status === "ready") && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={async () => {
+                if (!confirm("This will reset all documents so they need re-uploading. Continue?"))
+                  return;
+                const toastId = toast.loading("Clearing old chunks…");
+                try {
+                  const r = await reprocessDocuments(subject.id);
+                  toast.success(r.message, { id: toastId });
+                  await loadDocs();
+                } catch (e) {
+                  toast.error(e instanceof Error ? e.message : "Failed", { id: toastId });
+                }
+              }}
+            >
+              Reset chunks (re-upload required)
+            </Button>
+          )}
         </div>
         {loading ? (
           <div className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
@@ -352,8 +376,11 @@ function SubjectDetail({ subject, onChanged }: { subject: Subject; onChanged: ()
           </p>
         ) : (
           <div className="space-y-2">
-            {docs.map((doc) => (
-              <div key={doc.id} className="flex items-center gap-3 rounded-xl border bg-card px-3 py-2.5">
+            {sortChapterDocuments(docs).map((doc) => (
+              <div
+                key={doc.id}
+                className="flex items-center gap-3 rounded-xl border bg-card px-3 py-2.5"
+              >
                 <FileText className="size-5 shrink-0 text-primary" />
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-sm font-medium">{doc.name}</div>

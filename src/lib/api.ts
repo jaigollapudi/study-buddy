@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { buildContextBlock } from "@/lib/ai/prompts";
 import { retrieveContext } from "@/lib/rag";
-import type { QueryIntent } from "@/lib/rag/intent";
+import { detectQueryIntent, type QueryIntent } from "@/lib/rag/intent";
 import type { Citation, ChatMessage, RetrievedChunk } from "@/lib/types";
 
 export const messageSchema = z.object({
@@ -32,21 +32,14 @@ export function latestUserQuery(messages: ChatMessage[]): string {
   return messages[messages.length - 1]?.content ?? "";
 }
 
-/** Retrieve subject-scoped RAG context and render it into a prompt block. */
+/** Retrieve RAG context and render it into a prompt block. */
 export async function getContextBlock(
   query: string,
   subjectId?: string | null,
-): Promise<{
-  block: string;
-  chunks: RetrievedChunk[];
-  intent: QueryIntent;
-}> {
-  const { chunks, intent, catalog } = await retrieveContext(query, { subjectId });
-  return {
-    block: buildContextBlock(chunks, { catalog, intent }),
-    chunks,
-    intent,
-  };
+): Promise<{ block: string; chunks: RetrievedChunk[]; intent: QueryIntent }> {
+  const chunks = await retrieveContext(query, { subjectId });
+  const intent = detectQueryIntent(query);
+  return { block: buildContextBlock(chunks, { intent }), chunks, intent };
 }
 
 /** Convert retrieved chunks into compact, de-duplicated citations. */

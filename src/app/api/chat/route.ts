@@ -14,7 +14,6 @@ import {
   listMessages,
   maybeAutoTitle,
 } from "@/lib/db/sessions";
-import { tryBuildChapterList } from "@/lib/rag/catalog";
 import type { ChatMessage } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -35,7 +34,6 @@ export async function POST(req: Request) {
   const session = await getSession(body.sessionId);
   if (!session) return jsonError("Chat session not found.", 404);
 
-  // Build conversation context from history + the new message.
   const prior = await listMessages(body.sessionId);
   const history: ChatMessage[] = prior.map((m) => ({ role: m.role, content: m.content }));
   const limit = config.rag.chatHistoryLimit;
@@ -58,43 +56,26 @@ export async function POST(req: Request) {
     return jsonError(describeError(err), 502);
   }
 
-  const encoder = new TextEncoder();
-  const line = (obj: unknown) => encoder.encode(JSON.stringify(obj) + "\n");
-
-  // Chapter-list questions: build the answer directly from opening excerpts —
-  // faster and more consistent than asking the LLM to reformat the same data.
-  let prebuilt: Awaited<ReturnType<typeof tryBuildChapterList>> = null;
-  if (intent === "catalog" && session.subjectId) {
-    try {
-      prebuilt = await tryBuildChapterList(session.subjectId);
-      if (prebuilt) citations = prebuilt.citations;
-    } catch {
-      prebuilt = null;
-    }
-  }
-
   const provider = getTextProvider();
   const system = prompts.chat(block, intent);
   const temperature = intent === "catalog" ? 0.2 : 0.5;
+
+  const encoder = new TextEncoder();
+  const line = (obj: unknown) => encoder.encode(JSON.stringify(obj) + "\n");
 
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       controller.enqueue(line({ type: "meta", citations }));
       let full = "";
       try {
-        if (prebuilt) {
-          full = prebuilt.content;
-          controller.enqueue(line({ type: "delta", text: full }));
-        } else {
-          for await (const delta of provider.chatStream({
-            system,
-            messages,
-            temperature,
-            signal: req.signal,
-          })) {
-            full += delta;
-            controller.enqueue(line({ type: "delta", text: delta }));
-          }
+        for await (const delta of provider.chatStream({
+          system,
+          messages,
+          temperature,
+          signal: req.signal,
+        })) {
+          full += delta;
+          controller.enqueue(line({ type: "delta", text: delta }));
         }
         await addMessage({
           sessionId: body.sessionId,

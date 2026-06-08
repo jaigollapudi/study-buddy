@@ -36,6 +36,8 @@ export interface SourceDocument {
   id: string;
   subjectId: string;
   name: string;
+  /** Human-readable chapter title — editable in Admin; used in RAG context. */
+  title: string | null;
   type: string;
   size: number;
   pageCount: number | null;

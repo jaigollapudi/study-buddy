@@ -182,6 +182,13 @@ See `.env.example`. Key variables:
 
 ## Changelog
 
+### v0.2.1 — 2026-06-08
+
+- **Editable chapter titles** in Admin (`documents.title`) — authoritative source for catalog answers
+- Removed deterministic LLM bypass; all answers go through the model with **structured catalog context**
+- Catalog retrieval: chapter index + cleaned opening excerpts per file (not raw body text as titles)
+- Auto-suggested titles on upload; citations use admin title when set
+
 ### v0.2.0 — 2026-06-08
 
 - Migrated from LanceDB to **Supabase Postgres + pgvector**

@@ -89,6 +89,12 @@ export async function uploadDocument(subjectId: string, file: File): Promise<Sou
 export const deleteDocument = (id: string) =>
   sendJson<{ ok: true }>(`/api/documents/${id}`, "DELETE");
 
+export const reprocessDocuments = (subjectId: string) =>
+  sendJson<{ ok: true; message: string; resetCount: number }>(
+    `/api/subjects/${subjectId}/reprocess`,
+    "POST",
+  );
+
 /* ── Sessions ───────────────────────────────────────────────────────────── */
 
 export const listSessions = (subjectId: string) =>

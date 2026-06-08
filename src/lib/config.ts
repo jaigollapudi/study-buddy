@@ -38,12 +38,20 @@ export const config = {
   },
 
   rag: {
-    /** Approximate characters per chunk before splitting. */
-    chunkSize: envNum("RAG_CHUNK_SIZE", 1200),
-    /** Character overlap between consecutive chunks to preserve context. */
-    chunkOverlap: envNum("RAG_CHUNK_OVERLAP", 200),
-    /** How many chunks to retrieve and inject as context per query. */
-    topK: envNum("RAG_TOP_K", 10),
+    /** Approximate characters per chunk. ~600 keeps one concept per chunk. */
+    chunkSize: envNum("RAG_CHUNK_SIZE", 600),
+    /** Overlap preserves context at chunk boundaries. */
+    chunkOverlap: envNum("RAG_CHUNK_OVERLAP", 120),
+    /** Smaller chunks for opening pages — keeps headings separate. */
+    openingChunkSize: envNum("RAG_OPENING_CHUNK_SIZE", 300),
+    /** Hybrid candidates fetched before final cap. */
+    topK: envNum("RAG_TOP_K", 20),
+    /** Per-document hits for broad queries. */
+    perDocTopK: envNum("RAG_PER_DOC_TOP_K", 2),
+    /** Final chunks sent to the LLM. Smaller = more focused answers. */
+    maxContextChunks: envNum("RAG_MAX_CONTEXT_CHUNKS", 8),
+    /** Reject chunks with cosine similarity below this threshold. */
+    minSimilarity: envNum("RAG_MIN_SIMILARITY", 25) / 100, // stored as int % for env readability
     /** Max prior messages sent to the chat model (keeps local inference fast). */
     chatHistoryLimit: envNum("CHAT_HISTORY_LIMIT", 12),
     /** Max upload size in bytes — textbooks can be large. */
