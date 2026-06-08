@@ -1,57 +1,114 @@
-import { nanoid } from "nanoid";
 import { getTextProvider } from "@/lib/ai";
 import { config } from "@/lib/config";
-import type { RetrievedChunk, SourceDocument } from "@/lib/types";
-import { chunkText } from "./chunk";
-import { parseDocument } from "./parse";
 import {
-  addDocument,
-  deleteDocument,
-  listDocuments,
-  searchChunks,
-} from "./store";
+  getLeadChunksPerDocument,
+  insertChunks,
+  matchChunks,
+  type ChunkInput,
+} from "@/lib/db/chunks";
+import { createDocument, finalizeDocument, listDocuments } from "@/lib/db/documents";
+import type { RetrievedChunk, SourceDocument } from "@/lib/types";
+import { chunkPages } from "./chunk";
+import { isSupplementaryDocument } from "./catalog";
+import { buildDocumentCatalog, formatChunkContent } from "./format";
+import { detectQueryIntent, type QueryIntent } from "./intent";
+import { parseDocument } from "./parse";
 
-/** Parse → chunk → embed → store an uploaded document. */
+/** Embed an array of texts in batches to avoid overloading Ollama. */
+async function embedBatched(texts: string[]): Promise<number[][]> {
+  const provider = getTextProvider();
+  const out: number[][] = [];
+  const batch = config.rag.embedBatchSize;
+  for (let i = 0; i < texts.length; i += batch) {
+    const slice = texts.slice(i, i + batch);
+    out.push(...(await provider.embed(slice)));
+  }
+  return out;
+}
+
+/**
+ * Parse → chunk → embed → persist a textbook for a subject. The document row is
+ * created immediately (status "processing") and finalized when chunks land.
+ */
 export async function ingestDocument(
+  subjectId: string,
   filename: string,
   bytes: ArrayBuffer,
 ): Promise<SourceDocument> {
-  const { text, type } = await parseDocument(filename, bytes);
-  if (!text.trim()) {
-    throw new Error("No readable text found in that file.");
-  }
+  const { pages, type, pageCount } = await parseDocument(filename, bytes);
+  const chunks = chunkPages(pages);
+  if (!chunks.length) throw new Error("No readable text found in that file.");
 
-  const chunks = chunkText(text);
-  if (!chunks.length) throw new Error("Document produced no chunks.");
-
-  const vectors = await getTextProvider().embed(chunks);
-
-  const doc: SourceDocument = {
-    id: nanoid(),
+  const doc = await createDocument({
+    subjectId,
     name: filename,
     type,
     size: bytes.byteLength,
-    chunkCount: chunks.length,
-    createdAt: Date.now(),
-  };
+    pageCount,
+    status: "processing",
+  });
 
-  await addDocument(
-    doc,
-    chunks.map((t, i) => ({ text: t, vector: vectors[i] })),
-  );
-
-  return doc;
+  try {
+    const stored = chunks.map((c) =>
+      formatChunkContent(filename, c.page, c.content),
+    );
+    const vectors = await embedBatched(stored);
+    const rows: ChunkInput[] = chunks.map((c, i) => ({
+      content: stored[i],
+      page: c.page,
+      chunkIndex: c.chunkIndex,
+      embedding: vectors[i],
+    }));
+    await insertChunks(doc.id, subjectId, rows);
+    await finalizeDocument(doc.id, {
+      status: "ready",
+      chunkCount: rows.length,
+      pageCount,
+    });
+    return { ...doc, status: "ready", chunkCount: rows.length };
+  } catch (err) {
+    await finalizeDocument(doc.id, {
+      status: "error",
+      error: err instanceof Error ? err.message : "Ingestion failed.",
+    });
+    throw err;
+  }
 }
 
-/** Embed a query and retrieve the most relevant chunks. */
+export interface RetrievalResult {
+  chunks: RetrievedChunk[];
+  intent: QueryIntent;
+  catalog: string;
+}
+
+/** Embed a query and retrieve chunks using intent-aware strategy. */
 export async function retrieveContext(
   query: string,
-  opts: { topK?: number; docIds?: string[] } = {},
-): Promise<RetrievedChunk[]> {
-  if (!query.trim()) return [];
-  if ((await listDocuments()).length === 0) return [];
-  const [vector] = await getTextProvider().embed([query]);
-  return searchChunks(vector, opts.topK ?? config.rag.topK, opts.docIds);
-}
+  opts: { subjectId?: string | null; topK?: number } = {},
+): Promise<RetrievalResult> {
+  const intent = detectQueryIntent(query);
+  const subjectId = opts.subjectId ?? null;
 
-export { listDocuments, deleteDocument };
+  const docs = subjectId
+    ? (await listDocuments(subjectId)).filter((d) => d.status === "ready")
+    : [];
+  const catalog = buildDocumentCatalog(docs);
+
+  if (!query.trim()) {
+    return { chunks: [], intent, catalog };
+  }
+
+  // Structure questions: one opening excerpt per uploaded chapter file beats
+  // global vector search across thousands of body-text chunks.
+  if (intent === "catalog" && subjectId && docs.length) {
+    const lead = (await getLeadChunksPerDocument(subjectId, 1)).filter(
+      (c) => !isSupplementaryDocument(c.documentName),
+    );
+    return { chunks: lead, intent, catalog };
+  }
+
+  const [vector] = await getTextProvider().embed([query]);
+  const topK = opts.topK ?? (intent === "catalog" ? 12 : config.rag.topK);
+  const chunks = await matchChunks(vector, topK, subjectId);
+  return { chunks, intent, catalog };
+}

@@ -13,7 +13,7 @@ import { EmptyHint, FeatureShell, useFeatureMessages } from "./feature-shell";
 const LETTERS = ["A", "B", "C", "D", "E", "F"];
 
 export function QuizPanel() {
-  const { effectiveDocIds } = useStudyStore();
+  const subjectId = useStudyStore((s) => s.activeSubjectId);
   const buildMessages = useFeatureMessages();
   const [topic, setTopic] = useState("");
   const [loading, setLoading] = useState(false);
@@ -28,7 +28,7 @@ export function QuizPanel() {
     reset();
     setQuestions([]);
     try {
-      setQuestions(await generateQuiz({ messages, docIds: effectiveDocIds() }));
+      setQuestions(await generateQuiz({ messages, subjectId }));
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to generate quiz");
     } finally {

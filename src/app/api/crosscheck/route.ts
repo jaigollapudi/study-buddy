@@ -20,7 +20,7 @@ export async function POST(req: Request) {
   }
 
   try {
-    const { block } = await getContextBlock(body.question, body.docIds);
+    const { block } = await getContextBlock(body.question, body.subjectId);
     const raw = await getTextProvider().chat({
       system: prompts.crosscheck(block),
       messages: [

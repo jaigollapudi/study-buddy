@@ -1,5 +1,5 @@
 import { describeError, jsonError } from "@/lib/api";
-import { deleteDocument } from "@/lib/rag";
+import { deleteDocument } from "@/lib/db/documents";
 
 export const runtime = "nodejs";
 

@@ -35,7 +35,7 @@ const VERDICTS: Record<
 };
 
 export function CrosscheckPanel() {
-  const { effectiveDocIds } = useStudyStore();
+  const subjectId = useStudyStore((s) => s.activeSubjectId);
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState("");
   const [loading, setLoading] = useState(false);
@@ -49,7 +49,7 @@ export function CrosscheckPanel() {
     setLoading(true);
     setResult(null);
     try {
-      setResult(await crosscheck({ question, answer, docIds: effectiveDocIds() }));
+      setResult(await crosscheck({ question, answer, subjectId }));
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to review answer");
     } finally {

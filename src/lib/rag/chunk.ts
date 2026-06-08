@@ -1,56 +1,52 @@
 import { config } from "@/lib/config";
+import type { ParsedPage } from "./parse";
 
-/**
- * Split text into overlapping chunks. We try to break on paragraph and
- * sentence boundaries so chunks stay semantically coherent, then fall back to
- * hard character splits for very long runs.
- */
-export function chunkText(
+export interface TextChunk {
+  content: string;
+  page: number | null;
+  chunkIndex: number;
+}
+
+/** Split a single block of text into overlapping, sentence-aware pieces. */
+function splitBlock(
   raw: string,
   size = config.rag.chunkSize,
   overlap = config.rag.chunkOverlap,
 ): string[] {
-  const text = raw.replace(/\r\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+  const text = raw.replace(/\r\n/g, "\n").replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n").trim();
   if (!text) return [];
   if (text.length <= size) return [text];
 
-  // Prefer paragraph boundaries, then sentences, then whitespace.
-  const segments = text.split(/\n\n+/);
+  const sentences = text.match(/[^.!?\n]+[.!?]?\s*/g) ?? [text];
   const pieces: string[] = [];
-  for (const seg of segments) {
-    if (seg.length <= size) {
-      pieces.push(seg);
-    } else {
-      const sentences = seg.match(/[^.!?\n]+[.!?]?\s*/g) ?? [seg];
-      let buf = "";
-      for (const s of sentences) {
-        if ((buf + s).length > size && buf) {
-          pieces.push(buf.trim());
-          buf = "";
-        }
-        buf += s;
-        while (buf.length > size) {
-          pieces.push(buf.slice(0, size).trim());
-          buf = buf.slice(size);
-        }
-      }
-      if (buf.trim()) pieces.push(buf.trim());
+  let buf = "";
+  for (const s of sentences) {
+    if ((buf + s).length > size && buf) {
+      pieces.push(buf.trim());
+      buf = overlap > 0 ? buf.slice(-overlap) : "";
+    }
+    buf += s;
+    while (buf.length > size * 1.5) {
+      pieces.push(buf.slice(0, size).trim());
+      buf = buf.slice(size - overlap);
     }
   }
+  if (buf.trim()) pieces.push(buf.trim());
+  return pieces.filter(Boolean);
+}
 
-  // Merge small pieces up to `size` and add overlap between final chunks.
-  const merged: string[] = [];
-  let current = "";
-  for (const p of pieces) {
-    if ((current + "\n\n" + p).trim().length > size && current) {
-      merged.push(current.trim());
-      const tail = overlap > 0 ? current.slice(-overlap) : "";
-      current = tail ? tail + "\n\n" + p : p;
-    } else {
-      current = current ? current + "\n\n" + p : p;
+/**
+ * Chunk parsed pages, attaching the originating page number to each chunk so we
+ * can cite "Textbook X, p. N". Empty/whitespace pages are skipped.
+ */
+export function chunkPages(pages: ParsedPage[]): TextChunk[] {
+  const chunks: TextChunk[] = [];
+  let index = 0;
+  for (const { page, text } of pages) {
+    if (!text || !text.trim()) continue;
+    for (const piece of splitBlock(text)) {
+      chunks.push({ content: piece, page, chunkIndex: index++ });
     }
   }
-  if (current.trim()) merged.push(current.trim());
-
-  return merged.filter(Boolean);
+  return chunks;
 }

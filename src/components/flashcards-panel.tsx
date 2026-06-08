@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
 import { EmptyHint, FeatureShell, useFeatureMessages } from "./feature-shell";
 
 export function FlashcardsPanel() {
-  const { effectiveDocIds } = useStudyStore();
+  const subjectId = useStudyStore((s) => s.activeSubjectId);
   const buildMessages = useFeatureMessages();
   const [topic, setTopic] = useState("");
   const [loading, setLoading] = useState(false);
@@ -25,7 +25,7 @@ export function FlashcardsPanel() {
     setCards([]);
     setFlipped(new Set());
     try {
-      const result = await generateFlashcards({ messages, docIds: effectiveDocIds() });
+      const result = await generateFlashcards({ messages, subjectId });
       setCards(result);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to generate flashcards");

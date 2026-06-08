@@ -17,7 +17,10 @@ export function useFeatureMessages() {
     const trimmed = topic.trim();
     if (trimmed) return [{ role: "user", content: trimmed }];
 
-    const messages = useStudyStore.getState().messages;
+    const messages = useStudyStore
+      .getState()
+      .messages.map((m) => ({ role: m.role, content: m.content }))
+      .filter((m) => m.content.trim());
     if (messages.length === 0) {
       toast.error("Enter a topic, or start a chat first.");
       return null;

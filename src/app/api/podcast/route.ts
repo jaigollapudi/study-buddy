@@ -2,11 +2,11 @@ import { getTextProvider } from "@/lib/ai";
 import { prompts } from "@/lib/ai/prompts";
 import { config } from "@/lib/config";
 import {
-  chatBodySchema,
   describeError,
   getContextBlock,
   jsonError,
   latestUserQuery,
+  toolBodySchema,
 } from "@/lib/api";
 
 export const runtime = "nodejs";
@@ -14,7 +14,7 @@ export const runtime = "nodejs";
 export async function POST(req: Request) {
   let body;
   try {
-    body = chatBodySchema.parse(await req.json());
+    body = toolBodySchema.parse(await req.json());
   } catch {
     return jsonError("Invalid request body.");
   }
@@ -22,7 +22,7 @@ export async function POST(req: Request) {
   try {
     const { block } = await getContextBlock(
       latestUserQuery(body.messages),
-      body.docIds,
+      body.subjectId,
     );
     const script = await getTextProvider().chat({
       system: prompts.podcast(block),

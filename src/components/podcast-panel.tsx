@@ -21,7 +21,7 @@ function pickVoice(): SpeechSynthesisVoice | undefined {
 }
 
 export function PodcastPanel() {
-  const { effectiveDocIds } = useStudyStore();
+  const subjectId = useStudyStore((s) => s.activeSubjectId);
   const buildMessages = useFeatureMessages();
   const [topic, setTopic] = useState("");
   const [loading, setLoading] = useState(false);
@@ -48,7 +48,7 @@ export function PodcastPanel() {
     setLoading(true);
     setScript("");
     try {
-      const result = await generatePodcast({ messages, docIds: effectiveDocIds() });
+      const result = await generatePodcast({ messages, subjectId });
       setScript(result.script);
       setProvider(result.ttsProvider);
     } catch (err) {

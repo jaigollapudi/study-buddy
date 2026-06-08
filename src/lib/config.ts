@@ -19,6 +19,12 @@ function envNum(key: string, fallback: number): number {
 }
 
 export const config = {
+  /** Postgres connection string (local Supabase by default). */
+  databaseUrl: env(
+    "DATABASE_URL",
+    "postgresql://postgres:postgres@127.0.0.1:54322/postgres",
+  ),
+
   /** Which text-generation provider to use. Local Ollama by default. */
   textProvider: env("AI_TEXT_PROVIDER", "ollama") as "ollama",
 
@@ -37,11 +43,13 @@ export const config = {
     /** Character overlap between consecutive chunks to preserve context. */
     chunkOverlap: envNum("RAG_CHUNK_OVERLAP", 200),
     /** How many chunks to retrieve and inject as context per query. */
-    topK: envNum("RAG_TOP_K", 6),
-    /** Where the embedded LanceDB lives on disk. */
-    dbPath: env("LANCEDB_PATH", ".studybuddy/lancedb"),
-    /** Max upload size in bytes (default 10MB — the original claimed 2MB). */
-    maxUploadBytes: envNum("MAX_UPLOAD_BYTES", 10 * 1024 * 1024),
+    topK: envNum("RAG_TOP_K", 10),
+    /** Max prior messages sent to the chat model (keeps local inference fast). */
+    chatHistoryLimit: envNum("CHAT_HISTORY_LIMIT", 12),
+    /** Max upload size in bytes — textbooks can be large. */
+    maxUploadBytes: envNum("MAX_UPLOAD_BYTES", 100 * 1024 * 1024),
+    /** Embedding requests are batched to avoid overloading Ollama. */
+    embedBatchSize: envNum("RAG_EMBED_BATCH", 32),
   },
 
   tts: {

@@ -1,5 +1,5 @@
-import { StudyBuddy } from "@/components/study-buddy";
+import { StudentApp } from "@/components/app/student-app";
 
 export default function Home() {
-  return <StudyBuddy />;
+  return <StudentApp />;
 }

@@ -15,22 +15,72 @@ export type StudyMode =
   | "quiz"
   | "crosscheck";
 
+export interface Subject {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  color: string;
+  grade: string | null;
+  board: string | null;
+  isAllowed: boolean;
+  createdAt: string;
+  /** Aggregates (optional, when joined). */
+  documentCount?: number;
+  chunkCount?: number;
+}
+
+export type DocumentStatus = "processing" | "ready" | "error";
+
 export interface SourceDocument {
   id: string;
+  subjectId: string;
   name: string;
   type: string;
   size: number;
+  pageCount: number | null;
   chunkCount: number;
-  createdAt: number;
+  status: DocumentStatus;
+  error: string | null;
+  createdAt: string;
 }
 
-/** A chunk retrieved from the vector store, returned to the client as a citation. */
+/** A chunk retrieved from the vector store, surfaced as a citation. */
 export interface RetrievedChunk {
-  docId: string;
-  docName: string;
+  id: string;
+  documentId: string;
+  documentName: string;
+  subjectId: string;
+  content: string;
+  page: number | null;
   chunkIndex: number;
-  text: string;
   score: number;
+}
+
+/** Compact citation attached to an assistant message. */
+export interface Citation {
+  documentId: string;
+  documentName: string;
+  page: number | null;
+  chunkIndex: number;
+  score: number;
+}
+
+export interface ChatSession {
+  id: string;
+  subjectId: string | null;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface StoredMessage {
+  id: string;
+  sessionId: string;
+  role: Role;
+  content: string;
+  citations: Citation[] | null;
+  createdAt: string;
 }
 
 export interface Flashcard {
@@ -41,7 +91,6 @@ export interface Flashcard {
 export interface QuizQuestion {
   question: string;
   options: string[];
-  /** Index into `options` of the correct answer. */
   answerIndex: number;
   explanation?: string;
 }
