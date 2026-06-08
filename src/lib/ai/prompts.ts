@@ -91,32 +91,40 @@ for text-to-speech: no markdown, no symbols, no stage directions, no headings.
 Use short, clear sentences and a warm, conversational tone.`;
   },
 
-  flashcards(context: string, count = 8) {
+  flashcards(context: string, count = 10, excludeTopics: string[] = []) {
+    const exclusion =
+      excludeTopics.length
+        ? `\nDo NOT repeat or closely paraphrase any of these already-covered questions:\n${excludeTopics.map((t, i) => `${i + 1}. ${t}`).join("\n")}`
+        : "";
     return `${BASE}${context}
 
-Create ${count} study flashcards strictly from the context passages.
-Respond with ONLY a JSON object, no prose, in exactly this shape:
-{"cards":[{"question":"...","answer":"..."}]}
-Keep questions concise and answers self-contained (2–3 sentences max).`;
+Generate EXACTLY ${count} study flashcards from the context passages above.
+IMPORTANT: Output ONLY raw JSON — no prose, no markdown fences, no explanation before or after.
+Output format (strict):
+{"cards":[{"question":"short question","answer":"concise answer"}]}
+Rules:
+- Every card must be directly answerable from the passages.
+- Keep answers under 60 words. Use plain text only — no markdown, no quotes inside the answer.
+- Focus on definitions, facts, processes, and key examples.
+- Do NOT generate generic questions like "What is this chapter about?"${exclusion}`;
   },
 
-  quiz(context: string, count = 5) {
+  quiz(context: string, count = 10, excludeTopics: string[] = []) {
+    const exclusion =
+      excludeTopics.length
+        ? `\nDo NOT repeat or closely paraphrase any of these already-covered questions:\n${excludeTopics.map((t, i) => `${i + 1}. ${t}`).join("\n")}`
+        : "";
     return `${BASE}${context}
 
-Create a ${count}-question multiple-choice quiz from the context passages.
-Respond with ONLY a JSON object, no prose, in exactly this shape:
-{"questions":[{"question":"...","options":["A","B","C","D"],"answerIndex":0,"explanation":"..."}]}
-Rules: exactly 4 options per question, one clearly correct answer, explanation
-cites which source contains the answer.`;
+Generate EXACTLY ${count} multiple-choice questions from the context passages above.
+IMPORTANT: Output ONLY raw JSON — no prose, no markdown fences, no explanation before or after.
+Output format (strict):
+{"questions":[{"question":"...","options":["opt1","opt2","opt3","opt4"],"answerIndex":0,"explanation":"..."}]}
+Rules:
+- Exactly 4 options per question. answerIndex is 0-based.
+- Every question must be grounded in the passages.
+- Keep option text under 20 words each. Plain text only — no markdown inside strings.
+- explanation must be one sentence citing the source.${exclusion}`;
   },
 
-  crosscheck(context: string) {
-    return `${BASE}${context}
-
-The student will provide a QUESTION and their ANSWER. Evaluate it strictly against
-the context passages. Respond with ONLY a JSON object, no prose:
-{"verdict":"correct|partially-correct|incorrect","feedback":"...","correctAnswer":"..."}
-In "feedback": explain precisely what is right/wrong using the source material.
-In "correctAnswer": give the full correct answer as it appears in the context.`;
-  },
 } as const;

@@ -14,6 +14,7 @@ import {
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { SetupBanner } from "@/components/setup-banner";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import {
@@ -107,6 +108,10 @@ export function AdminApp() {
               )}
             </button>
           ))}
+        </div>
+
+        <div className="border-t p-3">
+          <SetupBanner />
         </div>
       </aside>
 

@@ -12,8 +12,9 @@ export type StudyMode =
   | "chat"
   | "podcast"
   | "flashcards"
-  | "quiz"
-  | "crosscheck";
+  | "quiz";
+
+export type ArtifactMode = Exclude<StudyMode, "chat">;
 
 export interface Subject {
   id: string;
@@ -76,6 +77,17 @@ export interface ChatSession {
   updatedAt: string;
 }
 
+export interface StudyArtifact {
+  id: string;
+  subjectId: string;
+  mode: ArtifactMode;
+  title: string;
+  topic: string | null;
+  payload: unknown;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface StoredMessage {
   id: string;
   sessionId: string;
@@ -97,8 +109,3 @@ export interface QuizQuestion {
   explanation?: string;
 }
 
-export interface CrosscheckResult {
-  verdict: "correct" | "partially-correct" | "incorrect";
-  feedback: string;
-  correctAnswer: string;
-}

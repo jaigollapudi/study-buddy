@@ -1,7 +1,9 @@
 "use client";
 
-import { Check, HelpCircle, Loader2, RotateCcw, X } from "lucide-react";
-import { useState } from "react";
+/* eslint-disable react-hooks/set-state-in-effect */
+
+import { Check, HelpCircle, Loader2, Plus, RotateCcw, X } from "lucide-react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { generateQuiz } from "@/lib/client";
@@ -13,26 +15,87 @@ import { EmptyHint, FeatureShell, useFeatureMessages } from "./feature-shell";
 const LETTERS = ["A", "B", "C", "D", "E", "F"];
 
 export function QuizPanel() {
-  const subjectId = useStudyStore((s) => s.activeSubjectId);
+  const { activeSubjectId: subjectId, activeArtifact, saveArtifact } = useStudyStore();
+  const artifact = activeArtifact();
   const buildMessages = useFeatureMessages();
   const [topic, setTopic] = useState("");
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [questions, setQuestions] = useState<QuizQuestion[]>([]);
   const [answers, setAnswers] = useState<Record<number, number>>({});
   const [submitted, setSubmitted] = useState(false);
 
+  useEffect(() => {
+    if (artifact?.mode !== "quiz") return;
+    const payload = artifact.payload as {
+      questions?: QuizQuestion[];
+      topic?: string | null;
+      answers?: Record<number, number>;
+      submitted?: boolean;
+    };
+    setQuestions(Array.isArray(payload.questions) ? payload.questions : []);
+    setTopic(payload.topic ?? artifact.topic ?? "");
+    setAnswers(payload.answers ?? {});
+    setSubmitted(Boolean(payload.submitted));
+  }, [artifact]);
+
   async function generate() {
+    if (!subjectId) {
+      toast.error("Pick a subject first.");
+      return;
+    }
     const messages = buildMessages(topic);
     if (!messages) return;
     setLoading(true);
     reset();
     setQuestions([]);
     try {
-      setQuestions(await generateQuiz({ messages, subjectId }));
+      const result = await generateQuiz({ messages, subjectId });
+      setQuestions(result);
+      await saveArtifact({
+        subjectId,
+        mode: "quiz",
+        title: topic.trim() || "Generated quiz",
+        topic: topic.trim() || null,
+        payload: {
+          questions: result,
+          topic: topic.trim() || null,
+          answers: {},
+          submitted: false,
+        },
+      });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to generate quiz");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function generateMore() {
+    if (!subjectId) return;
+    const messages = buildMessages(topic);
+    if (!messages) return;
+    setLoadingMore(true);
+    try {
+      const excludeTopics = questions.map((q) => q.question);
+      const result = await generateQuiz({ messages, subjectId, excludeTopics });
+      const next = [...questions, ...result];
+      // Merge new questions; reset answers/submitted for the new batch only.
+      setQuestions(next);
+      setSubmitted(false);
+      if (artifact && artifact.mode === "quiz") {
+        await saveArtifact({
+          subjectId,
+          mode: "quiz",
+          title: artifact.title,
+          topic: artifact.topic,
+          payload: { questions: next, topic: artifact.topic, answers: {}, submitted: false },
+        });
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to generate more questions");
+    } finally {
+      setLoadingMore(false);
     }
   }
 
@@ -57,7 +120,7 @@ export function QuizPanel() {
       placeholder="Optional: a topic to be quizzed on (leave blank to use your chat)"
       onGenerate={generate}
       loading={loading}
-      ctaLabel="Generate quiz"
+      ctaLabel="Generate 10 questions"
     >
       {loading && (
         <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
@@ -133,6 +196,22 @@ export function QuizPanel() {
               Submit answers
             </Button>
           )}
+
+          <div className="flex justify-center pt-1">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={loadingMore || loading}
+              onClick={generateMore}
+            >
+              {loadingMore ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Plus className="size-4" />
+              )}
+              Generate 10 more questions
+            </Button>
+          </div>
         </div>
       )}
     </FeatureShell>

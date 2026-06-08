@@ -43,11 +43,26 @@ export function ChatPanel() {
   const [input, setInput] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const prevMsgCountRef = useRef(0);
   const subject = activeSubject();
 
   useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+    const el = scrollRef.current;
+    if (!el) return;
+    // Jump instantly when loading history; smooth-scroll only for new messages.
+    const isInitialLoad = prevMsgCountRef.current === 0 && messages.length > 0;
+    el.scrollTo({
+      top: el.scrollHeight,
+      behavior: isInitialLoad ? "instant" : "smooth",
+    });
+    prevMsgCountRef.current = messages.length;
   }, [messages]);
+
+  // Reset counter when the session changes so the next load is treated as initial.
+  const activeSessionId = useStudyStore((s) => s.activeSessionId);
+  useEffect(() => {
+    prevMsgCountRef.current = 0;
+  }, [activeSessionId]);
 
   function autoGrow() {
     const el = textareaRef.current;

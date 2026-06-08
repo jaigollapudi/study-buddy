@@ -1,12 +1,13 @@
 import type {
+  ArtifactMode,
   ChatMessage,
   ChatSession,
   Citation,
-  CrosscheckResult,
   Flashcard,
   QuizQuestion,
   SourceDocument,
   StoredMessage,
+  StudyArtifact,
   Subject,
 } from "@/lib/types";
 
@@ -118,6 +119,34 @@ export const listMessages = (sessionId: string) =>
     (d) => d.messages,
   );
 
+/* ── Generated study artifacts ──────────────────────────────────────────── */
+
+export const listArtifacts = (subjectId: string) =>
+  getJson<{ artifacts: StudyArtifact[] }>(`/api/subjects/${subjectId}/artifacts`).then(
+    (d) => d.artifacts,
+  );
+
+export const createArtifact = (input: {
+  subjectId: string;
+  mode: ArtifactMode;
+  title: string;
+  topic?: string | null;
+  payload: unknown;
+}) =>
+  sendJson<{ artifact: StudyArtifact }>(
+    `/api/subjects/${input.subjectId}/artifacts`,
+    "POST",
+    {
+      mode: input.mode,
+      title: input.title,
+      topic: input.topic ?? null,
+      payload: input.payload,
+    },
+  ).then((d) => d.artifact);
+
+export const deleteArtifact = (id: string) =>
+  sendJson<{ ok: true }>(`/api/artifacts/${id}`, "DELETE");
+
 /* ── Chat (NDJSON stream) ───────────────────────────────────────────────── */
 
 interface StreamHandlers {
@@ -175,20 +204,14 @@ interface ToolInput {
   subjectId?: string | null;
 }
 
-export const generateFlashcards = (input: ToolInput) =>
+export const generateFlashcards = (input: ToolInput & { excludeTopics?: string[] }) =>
   sendJson<{ cards: Flashcard[] }>("/api/flashcards", "POST", input).then((d) => d.cards);
 
-export const generateQuiz = (input: ToolInput) =>
+export const generateQuiz = (input: ToolInput & { excludeTopics?: string[] }) =>
   sendJson<{ questions: QuizQuestion[] }>("/api/quiz", "POST", input).then((d) => d.questions);
 
 export const generatePodcast = (input: ToolInput) =>
   sendJson<{ script: string; ttsProvider: "browser" | "gemini" }>("/api/podcast", "POST", input);
-
-export const crosscheck = (input: {
-  question: string;
-  answer: string;
-  subjectId?: string | null;
-}) => sendJson<CrosscheckResult>("/api/crosscheck", "POST", input);
 
 export async function synthesizeServerTts(
   text: string,

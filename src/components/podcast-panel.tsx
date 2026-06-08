@@ -1,5 +1,7 @@
 "use client";
 
+/* eslint-disable react-hooks/set-state-in-effect */
+
 import { Headphones, Loader2, Pause, Play, Square } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -21,7 +23,8 @@ function pickVoice(): SpeechSynthesisVoice | undefined {
 }
 
 export function PodcastPanel() {
-  const subjectId = useStudyStore((s) => s.activeSubjectId);
+  const { activeSubjectId: subjectId, activeArtifact, saveArtifact } = useStudyStore();
+  const artifact = activeArtifact();
   const buildMessages = useFeatureMessages();
   const [topic, setTopic] = useState("");
   const [loading, setLoading] = useState(false);
@@ -41,7 +44,24 @@ export function PodcastPanel() {
     };
   }, []);
 
+  useEffect(() => {
+    if (artifact?.mode !== "podcast") return;
+    const payload = artifact.payload as {
+      script?: string;
+      provider?: "browser" | "gemini";
+      topic?: string | null;
+    };
+    stop();
+    setScript(payload.script ?? "");
+    setProvider(payload.provider ?? "browser");
+    setTopic(payload.topic ?? artifact.topic ?? "");
+  }, [artifact]);
+
   async function generate() {
+    if (!subjectId) {
+      toast.error("Pick a subject first.");
+      return;
+    }
     const messages = buildMessages(topic);
     if (!messages) return;
     stop();
@@ -51,6 +71,17 @@ export function PodcastPanel() {
       const result = await generatePodcast({ messages, subjectId });
       setScript(result.script);
       setProvider(result.ttsProvider);
+      await saveArtifact({
+        subjectId,
+        mode: "podcast",
+        title: topic.trim() || "Generated podcast",
+        topic: topic.trim() || null,
+        payload: {
+          script: result.script,
+          provider: result.ttsProvider,
+          topic: topic.trim() || null,
+        },
+      });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to generate podcast");
     } finally {

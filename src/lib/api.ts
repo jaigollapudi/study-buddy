@@ -15,12 +15,6 @@ export const toolBodySchema = z.object({
   subjectId: z.string().uuid().nullable().optional(),
 });
 
-export const crosscheckBodySchema = z.object({
-  question: z.string().min(1),
-  answer: z.string().min(1),
-  subjectId: z.string().uuid().nullable().optional(),
-});
-
 export function jsonError(message: string, status = 400) {
   return Response.json({ error: message }, { status });
 }

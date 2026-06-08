@@ -4,17 +4,21 @@ import {
   ChevronDown,
   ChevronRight,
   GraduationCap,
+  Headphones,
+  ListChecks,
+  MessageSquare,
   MessageSquarePlus,
   MoreHorizontal,
   Pencil,
   Plus,
+  Search,
   Settings,
+  SquareStack,
   Trash2,
 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { SetupBanner } from "@/components/setup-banner";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import {
@@ -25,7 +29,14 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useStudyStore } from "@/lib/store";
+import type { ArtifactMode } from "@/lib/types";
 import { cn } from "@/lib/utils";
+
+const ARTIFACT_META: Record<ArtifactMode, { label: string; icon: React.ReactNode }> = {
+  flashcards: { label: "Flashcards", icon: <SquareStack className="size-3.5" /> },
+  quiz: { label: "Quiz", icon: <ListChecks className="size-3.5" /> },
+  podcast: { label: "Podcast", icon: <Headphones className="size-3.5" /> },
+};
 
 export function SubjectSidebar() {
   const {
@@ -35,11 +46,17 @@ export function SubjectSidebar() {
     expandedSubjectIds,
     toggleSubject,
     sessionsBySubject,
+    artifactsBySubject,
+    sidebarSearch,
+    setSidebarSearch,
     activeSessionId,
+    activeArtifactId,
     selectSession,
+    selectArtifact,
     newSession,
     renameSession,
     deleteSession,
+    deleteArtifact,
   } = useStudyStore();
 
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -84,7 +101,15 @@ export function SubjectSidebar() {
       </div>
 
       <div className="px-3 pb-2">
-        <SetupBanner />
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+          <input
+            value={sidebarSearch}
+            onChange={(e) => setSidebarSearch(e.target.value)}
+            placeholder="Search chats, quizzes, podcasts…"
+            className="h-9 w-full rounded-lg border bg-background pl-9 pr-3 text-sm outline-none transition-colors placeholder:text-muted-foreground focus:border-primary/60"
+          />
+        </div>
       </div>
 
       <div className="px-4 pb-1 pt-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
@@ -110,6 +135,35 @@ export function SubjectSidebar() {
           {subjects.map((subject) => {
             const expanded = expandedSubjectIds.includes(subject.id);
             const sessions = sessionsBySubject[subject.id] ?? [];
+            const artifacts = artifactsBySubject[subject.id] ?? [];
+            const q = sidebarSearch.trim().toLowerCase();
+            const rows = [
+              ...sessions.map((session) => ({
+                id: session.id,
+                type: "chat" as const,
+                label: "Chat",
+                title: session.title,
+                updatedAt: session.updatedAt,
+                icon: <MessageSquare className="size-3.5" />,
+              })),
+              ...artifacts.map((artifact) => ({
+                id: artifact.id,
+                type: "artifact" as const,
+                mode: artifact.mode,
+                label: ARTIFACT_META[artifact.mode].label,
+                title: artifact.title,
+                updatedAt: artifact.updatedAt,
+                icon: ARTIFACT_META[artifact.mode].icon,
+              })),
+            ].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+            const filteredRows = q
+              ? rows.filter((row) =>
+                  `${row.label} ${row.title}`.toLowerCase().includes(q),
+                )
+              : rows;
+            const subjectMatches = subject.name.toLowerCase().includes(q);
+            if (q && !subjectMatches && filteredRows.length === 0) return null;
+
             return (
               <div key={subject.id}>
                 <button
@@ -140,16 +194,21 @@ export function SubjectSidebar() {
                       <MessageSquarePlus className="size-4" /> New chat
                     </button>
 
-                    {sessions.length === 0 && (
-                      <p className="px-2 py-1.5 text-xs text-muted-foreground">No chats yet.</p>
+                    {filteredRows.length === 0 && (
+                      <p className="px-2 py-1.5 text-xs text-muted-foreground">
+                        {q ? "No matching history." : "No history yet."}
+                      </p>
                     )}
 
-                    {sessions.map((session) => {
-                      const active = session.id === activeSessionId;
-                      const editing = editingId === session.id;
+                    {filteredRows.map((row) => {
+                      const active =
+                        row.type === "chat"
+                          ? row.id === activeSessionId
+                          : row.id === activeArtifactId;
+                      const editing = row.type === "chat" && editingId === row.id;
                       return (
                         <div
-                          key={session.id}
+                          key={`${row.type}-${row.id}`}
                           className={cn(
                             "group flex items-center gap-1 rounded-lg pr-1 transition-colors",
                             active ? "bg-accent" : "hover:bg-accent/60",
@@ -160,22 +219,29 @@ export function SubjectSidebar() {
                               ref={editRef}
                               value={draft}
                               onChange={(e) => setDraft(e.target.value)}
-                              onBlur={() => commitRename(subject.id, session.id)}
+                              onBlur={() => commitRename(subject.id, row.id)}
                               onKeyDown={(e) => {
-                                if (e.key === "Enter") commitRename(subject.id, session.id);
+                                if (e.key === "Enter") commitRename(subject.id, row.id);
                                 if (e.key === "Escape") setEditingId(null);
                               }}
                               className="m-0.5 w-full rounded-md border bg-background px-2 py-1 text-sm outline-none"
                             />
                           ) : (
                             <button
-                              onClick={() => selectSession(subject.id, session.id)}
+                              onClick={() => {
+                                if (row.type === "chat") selectSession(subject.id, row.id);
+                                else selectArtifact(subject.id, row.id);
+                              }}
                               className={cn(
-                                "min-w-0 flex-1 truncate px-2 py-1.5 text-left text-sm",
+                                "flex min-w-0 flex-1 items-center gap-1.5 truncate px-2 py-1.5 text-left text-sm",
                                 active ? "text-foreground" : "text-muted-foreground",
                               )}
                             >
-                              {session.title}
+                              <span className="shrink-0 text-primary">{row.icon}</span>
+                              <span className="shrink-0 text-[11px] font-medium">
+                                {row.label}:
+                              </span>
+                              <span className="min-w-0 truncate">{row.title}</span>
                             </button>
                           )}
 
@@ -186,9 +252,11 @@ export function SubjectSidebar() {
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end" className="w-36">
                                 <DropdownMenuItem
+                                  disabled={row.type !== "chat"}
                                   onClick={() => {
-                                    setDraft(session.title);
-                                    setEditingId(session.id);
+                                    if (row.type !== "chat") return;
+                                    setDraft(row.title);
+                                    setEditingId(row.id);
                                   }}
                                 >
                                   <Pencil className="size-3.5" /> Rename
@@ -196,8 +264,13 @@ export function SubjectSidebar() {
                                 <DropdownMenuItem
                                   variant="destructive"
                                   onClick={async () => {
-                                    await deleteSession(subject.id, session.id);
-                                    toast.success("Chat deleted");
+                                    if (row.type === "chat") {
+                                      await deleteSession(subject.id, row.id);
+                                      toast.success("Chat deleted");
+                                    } else {
+                                      await deleteArtifact(subject.id, row.id);
+                                      toast.success(`${row.label} deleted`);
+                                    }
                                   }}
                                 >
                                   <Trash2 className="size-3.5" /> Delete

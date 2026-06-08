@@ -2,10 +2,12 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import * as api from "@/lib/client";
 import type {
+  ArtifactMode,
   ChatSession,
   Citation,
   Role,
   StudyMode,
+  StudyArtifact,
   Subject,
 } from "@/lib/types";
 
@@ -22,10 +24,13 @@ interface StudyState {
   subjects: Subject[];
   subjectsLoaded: boolean;
   sessionsBySubject: Record<string, ChatSession[]>;
+  artifactsBySubject: Record<string, StudyArtifact[]>;
   expandedSubjectIds: string[];
+  sidebarSearch: string;
 
   activeSubjectId: string | null;
   activeSessionId: string | null;
+  activeArtifactId: string | null;
   messages: ChatUIMessage[];
   messagesLoading: boolean;
 
@@ -35,20 +40,32 @@ interface StudyState {
 
   setBuddyName: (name: string) => void;
   setActiveMode: (mode: StudyMode) => void;
+  setSidebarSearch: (query: string) => void;
 
   loadSubjects: () => Promise<void>;
   toggleSubject: (id: string) => Promise<void>;
   loadSessions: (subjectId: string) => Promise<void>;
+  loadArtifacts: (subjectId: string) => Promise<void>;
 
   newSession: (subjectId: string) => Promise<void>;
   selectSession: (subjectId: string, sessionId: string) => Promise<void>;
   renameSession: (subjectId: string, sessionId: string, title: string) => Promise<void>;
   deleteSession: (subjectId: string, sessionId: string) => Promise<void>;
+  selectArtifact: (subjectId: string, artifactId: string) => void;
+  saveArtifact: (input: {
+    subjectId: string;
+    mode: ArtifactMode;
+    title: string;
+    topic?: string | null;
+    payload: unknown;
+  }) => Promise<StudyArtifact>;
+  deleteArtifact: (subjectId: string, artifactId: string) => Promise<void>;
 
   sendMessage: (content: string) => Promise<void>;
   stopStreaming: () => void;
 
   activeSubject: () => Subject | null;
+  activeArtifact: () => StudyArtifact | null;
 }
 
 export const useStudyStore = create<StudyState>()(
@@ -58,9 +75,12 @@ export const useStudyStore = create<StudyState>()(
       subjects: [],
       subjectsLoaded: false,
       sessionsBySubject: {},
+      artifactsBySubject: {},
       expandedSubjectIds: [],
+      sidebarSearch: "",
       activeSubjectId: null,
       activeSessionId: null,
+      activeArtifactId: null,
       messages: [],
       messagesLoading: false,
       activeMode: "chat",
@@ -69,10 +89,29 @@ export const useStudyStore = create<StudyState>()(
 
       setBuddyName: (buddyName) => set({ buddyName }),
       setActiveMode: (activeMode) => set({ activeMode }),
+      setSidebarSearch: (sidebarSearch) => set({ sidebarSearch }),
 
       loadSubjects: async () => {
         const subjects = await api.listSubjects(false);
         set({ subjects, subjectsLoaded: true });
+        await Promise.all(
+          subjects.map(async (subject) => {
+            const [sessions, artifacts] = await Promise.all([
+              api.listSessions(subject.id),
+              api.listArtifacts(subject.id),
+            ]);
+            set((s) => ({
+              sessionsBySubject: {
+                ...s.sessionsBySubject,
+                [subject.id]: sessions,
+              },
+              artifactsBySubject: {
+                ...s.artifactsBySubject,
+                [subject.id]: artifacts,
+              },
+            }));
+          }),
+        );
       },
 
       toggleSubject: async (id) => {
@@ -86,11 +125,21 @@ export const useStudyStore = create<StudyState>()(
         if (!isOpen && !get().sessionsBySubject[id]) {
           await get().loadSessions(id);
         }
+        if (!isOpen && !get().artifactsBySubject[id]) {
+          await get().loadArtifacts(id);
+        }
       },
 
       loadSessions: async (subjectId) => {
         const sessions = await api.listSessions(subjectId);
         set((s) => ({ sessionsBySubject: { ...s.sessionsBySubject, [subjectId]: sessions } }));
+      },
+
+      loadArtifacts: async (subjectId) => {
+        const artifacts = await api.listArtifacts(subjectId);
+        set((s) => ({
+          artifactsBySubject: { ...s.artifactsBySubject, [subjectId]: artifacts },
+        }));
       },
 
       newSession: async (subjectId) => {
@@ -105,6 +154,7 @@ export const useStudyStore = create<StudyState>()(
             : [...s.expandedSubjectIds, subjectId],
           activeSubjectId: subjectId,
           activeSessionId: session.id,
+          activeArtifactId: null,
           messages: [],
           activeMode: "chat",
         }));
@@ -114,6 +164,7 @@ export const useStudyStore = create<StudyState>()(
         set({
           activeSubjectId: subjectId,
           activeSessionId: sessionId,
+          activeArtifactId: null,
           messages: [],
           messagesLoading: true,
           activeMode: "chat",
@@ -154,6 +205,52 @@ export const useStudyStore = create<StudyState>()(
           },
           activeSessionId: s.activeSessionId === sessionId ? null : s.activeSessionId,
           messages: s.activeSessionId === sessionId ? [] : s.messages,
+        }));
+      },
+
+      selectArtifact: (subjectId, artifactId) => {
+        const artifact = get().artifactsBySubject[subjectId]?.find((a) => a.id === artifactId);
+        if (!artifact) return;
+        set({
+          activeSubjectId: subjectId,
+          activeSessionId: null,
+          activeArtifactId: artifactId,
+          activeMode: artifact.mode,
+        });
+      },
+
+      saveArtifact: async (input) => {
+        const artifact = await api.createArtifact(input);
+        set((s) => ({
+          artifactsBySubject: {
+            ...s.artifactsBySubject,
+            [input.subjectId]: [
+              artifact,
+              ...(s.artifactsBySubject[input.subjectId] ?? []),
+            ],
+          },
+          expandedSubjectIds: s.expandedSubjectIds.includes(input.subjectId)
+            ? s.expandedSubjectIds
+            : [...s.expandedSubjectIds, input.subjectId],
+          activeSubjectId: input.subjectId,
+          activeSessionId: null,
+          activeArtifactId: artifact.id,
+          activeMode: artifact.mode,
+        }));
+        return artifact;
+      },
+
+      deleteArtifact: async (subjectId, artifactId) => {
+        await api.deleteArtifact(artifactId);
+        set((s) => ({
+          artifactsBySubject: {
+            ...s.artifactsBySubject,
+            [subjectId]: (s.artifactsBySubject[subjectId] ?? []).filter(
+              (a) => a.id !== artifactId,
+            ),
+          },
+          activeArtifactId:
+            s.activeArtifactId === artifactId ? null : s.activeArtifactId,
         }));
       },
 
@@ -209,6 +306,15 @@ export const useStudyStore = create<StudyState>()(
       activeSubject: () => {
         const { subjects, activeSubjectId } = get();
         return subjects.find((s) => s.id === activeSubjectId) ?? null;
+      },
+
+      activeArtifact: () => {
+        const { activeSubjectId, activeArtifactId, artifactsBySubject } = get();
+        if (!activeSubjectId || !activeArtifactId) return null;
+        return (
+          artifactsBySubject[activeSubjectId]?.find((a) => a.id === activeArtifactId) ??
+          null
+        );
       },
     }),
     {

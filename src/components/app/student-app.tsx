@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  BookOpen,
   GraduationCap,
   Headphones,
   ListChecks,
@@ -11,7 +10,6 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { ChatPanel } from "@/components/chat/chat-panel";
-import { CrosscheckPanel } from "@/components/crosscheck-panel";
 import { FlashcardsPanel } from "@/components/flashcards-panel";
 import { PodcastPanel } from "@/components/podcast-panel";
 import { QuizPanel } from "@/components/quiz-panel";
@@ -26,23 +24,23 @@ const TABS: { id: StudyMode; label: string; icon: React.ReactNode }[] = [
   { id: "chat", label: "Chat", icon: <MessageSquare className="size-4" /> },
   { id: "flashcards", label: "Flashcards", icon: <SquareStack className="size-4" /> },
   { id: "quiz", label: "Quiz", icon: <ListChecks className="size-4" /> },
-  { id: "crosscheck", label: "Cross-check", icon: <BookOpen className="size-4" /> },
   { id: "podcast", label: "Podcast", icon: <Headphones className="size-4" /> },
 ];
 
 export function StudentApp() {
-  const { activeMode, setActiveMode, activeSessionId, activeSubject } = useStudyStore();
+  const { activeMode, setActiveMode, activeSessionId, activeArtifactId, activeSubject } =
+    useStudyStore();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const subject = activeSubject();
 
   return (
-    <div className="grid h-dvh grid-cols-1 md:grid-cols-[300px_1fr]">
-      <aside className="hidden border-r md:block">
+    <div className="grid min-h-dvh grid-cols-1 md:grid-cols-[300px_1fr]">
+      <aside className="sticky top-0 hidden h-dvh self-start border-r md:block">
         <SubjectSidebar />
       </aside>
 
-      <main className="flex min-w-0 flex-col bg-background">
-        <header className="flex items-center gap-2 border-b px-3 py-2">
+      <main className="flex min-h-dvh min-w-0 flex-col bg-background">
+        <header className="sticky top-0 z-10 flex items-center gap-2 border-b bg-background/90 px-3 py-2 backdrop-blur">
           <Button
             variant="ghost"
             size="icon"
@@ -58,7 +56,7 @@ export function StudentApp() {
             </DialogContent>
           </Dialog>
 
-          {activeSessionId && subject && (
+          {(activeSessionId || activeArtifactId) && subject && (
             <>
               <span
                 className="ml-1 size-2.5 rounded-full"
@@ -87,14 +85,13 @@ export function StudentApp() {
         </header>
 
         <div className="min-h-0 flex-1">
-          {!activeSessionId ? (
+          {!activeSessionId && !activeArtifactId ? (
             <Welcome />
           ) : (
             <>
-              {activeMode === "chat" && <ChatPanel />}
+              {activeMode === "chat" && (activeSessionId ? <ChatPanel /> : <Welcome />)}
               {activeMode === "flashcards" && <FlashcardsPanel />}
               {activeMode === "quiz" && <QuizPanel />}
-              {activeMode === "crosscheck" && <CrosscheckPanel />}
               {activeMode === "podcast" && <PodcastPanel />}
             </>
           )}
